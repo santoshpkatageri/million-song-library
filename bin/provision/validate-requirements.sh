@@ -281,12 +281,23 @@ function verifyNvm {
   if [[ -f ~/.bashrc ]]; then . ~/.bashrc ; fi
   if [[ -f ~/.profile ]]; then . ~/.profile ; fi
   if [[ -f ~/.zshrc ]]; then . ~/.zshrc ; fi
-
+  
   if type -p nvm; then
       echo found nvm executable in PATH
   else
-    echo "Please install nvm"
-    exit 1;
+    ## not found by path, try looking for it via Homebrew
+    if type -p brew; then
+      brew ls --versions nvm | grep -e 'nvm\s[0-9]*\.[0-9]*\.[0-9]*'
+      if [[ $? -eq 0 ]]; then
+        echo found nvm in Homebrew
+      else
+        echo "Please install nvm"
+        exit 1;
+      fi
+    else
+      echo "Please install nvm"
+      exit 1;
+    fi
   fi
 }
 
