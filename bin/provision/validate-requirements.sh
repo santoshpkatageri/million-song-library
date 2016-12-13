@@ -104,8 +104,12 @@ function verifyNpm {
       echo found npm executable in PATH
       _npm=npm
   else
-      echo "Please install npm ${minVersion} or greater"
-      exit 1;
+      if [[ "yes" == $(askYesOrNo "Would you like us to install npm for you?") ]]; then
+        bash basic-dep-setup.sh -npm
+      else
+        echo "Please install npm ${minVersion} or greater"
+        exit 1;
+      fi
   fi
 
   if [[ "$_npm" ]]; then
@@ -129,14 +133,46 @@ function verifyNpm {
   fi
 }
 
+function verifyBower {
+  if type -p bower; then
+      echo found bower executable in PATH
+  else
+    if [[ "yes" == $(askYesOrNo "Would you like us to install bower for you?") ]]; then
+      bash basic-dep-setup.sh -bower
+    else
+      echo "please install bower"
+      exit 1;
+    fi
+  fi
+}
+
+function verifyGem {
+  if type -p gem; then
+      echo found gem executable in PATH
+  else
+    if [[ "yes" == $(askYesOrNo "Would you like us to install gem for you?") ]]; then
+      bash basic-dep-setup.sh -gem
+    else
+      echo "please install gem"
+      exit 1;
+    fi
+  fi
+}
+
 function verifyNode {
   minVersion=0.12.x
   if type -p node; then
       echo found nodejs executable in PATH
       _node=node
   else
-      echo "Please install nodejs version ${minVersion} or greater"
-      exit 1;
+      if [[ "yes" == $(askYesOrNo "Would you like us to install node for you?") ]]; then
+        bash basic-dep-setup.sh -npm
+        verifyBower
+        verifyGem
+      else
+        echo "Please install nodejs version ${minVersion} or greater"
+        exit 1;
+      fi
   fi
 
   if [[ "$_node" ]]; then
@@ -148,11 +184,12 @@ function verifyNode {
           echo "node version is greater than ${minVersion}"
           printf "\t** The version of node installed on this machine (${version}) is newer than the ${minVersion} version needed for MSL. MSL has not been tested using this version of Node, so you may experience problems. "
           if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of Node that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]
-          then
+            "no" == $(askYesOrNo "Are you *really* sure?") ]]; then
             echo "Quitting MSL installation."
             exit 1
           fi
+          verifyBower
+          verifyGem
       else
           echo "node version is less than ${minVersion}"
           exit 1;
@@ -169,8 +206,12 @@ function verifyJava {
       echo found java executable in JAVA_HOME
       _java="$JAVA_HOME/bin/java"
   else
+    if [[ "yes" == $(askYesOrNo "Would you like us to install java 1.8 for you?") ]]; then
+        bash basic-dep-setup.sh -java
+    else
       echo "please install Java version ${minVersion} or greater"
       exit 1;
+    fi
   fi
 
   if [[ "$_java" ]]; then
@@ -218,8 +259,12 @@ function verifyCassandra {
       echo found cassandra executable in CASSANDRA_HOME
       _cassandra="$CASSANDRA_BIN/cassandra"
   else
+    if [[ "yes" == $(askYesOrNo "Would you like us to install cassandra for you?") ]]; then
+      bash basic-dep-setup.sh -cassandra
+    else
       echo "Please download/install cassandra version 2.1.11"
       exit 1;
+    fi
   fi
 
   if [[ "$_cassandra" ]]; then
@@ -240,8 +285,12 @@ function verifyMaven {
       echo found mvn executable in PATH
       _mvn=mvn
   else
+    if [[ "yes" == $(askYesOrNo "Would you like us to install maven for you?") ]]; then
+      bash basic-dep-setup.sh -maven
+    else
       echo "please install maven version ${minVersion} or greater"
       exit 1;
+    fi
   fi
 
   version=$(mvn --version | grep -e 'Maven\s[3-9]\.[0-9]\.[0-9]*')
@@ -291,8 +340,12 @@ function verifyNvm {
       if [[ $? -eq 0 ]]; then
         echo found nvm in Homebrew
       else
-        echo "Please install nvm"
-        exit 1;
+        if [[ "yes" == $(askYesOrNo "Would you like us to install nvm for you?") ]]; then
+          bash basic-dep-setup.sh -nvm
+        else
+          echo "Please install nvm"
+          exit 1;
+        fi
       fi
     else
       echo "Please install nvm"
@@ -309,18 +362,17 @@ function askYesOrNo() {
     esac
 }
 
-init() {
-verifyNvm
-verifyMaven
-verifyNpm
-validateOS
-verifyJava
-verifyNode
-verifyGit
-validatePorts
-verifyCassandra
-
-exit 0;
+function init() {
+  verifyNvm
+  verifyMaven
+  verifyNpm
+  validateOS
+  verifyJava
+  verifyNode
+  verifyGit
+  validatePorts
+  verifyCassandra
+  exit 0;
 }
 
 echo "Start of Million Song Library validation of required installations script..."

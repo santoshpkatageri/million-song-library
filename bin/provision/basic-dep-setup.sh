@@ -9,6 +9,60 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 NC='\033[0m' # no color
 
+MAVEN=0
+NPM=0
+NVM=0
+BOWER=0
+GEM=0
+JAVA=0
+CASSANDRA=0
+
+function resetAll () {
+  MAVEN=1
+  NPM=1
+  NVM=1
+  BOWER=1
+  GEM=1
+  JAVA=1
+  CASSANDRA=1
+}
+
+while [[ $# > 0 ]]; do
+    key="$1"
+    case $key in
+      -maven)
+      resetAll
+      MAVEN=0
+      shift
+      ;;
+      -npm)
+      resetAll
+      NPM=0
+      ;;
+      -bower)
+      resetAll
+      BOWER=0
+      ;;
+      -gem)
+      resetAll
+      GEM=0
+      ;;
+      -nvm)
+      resetAll
+      NVM=0
+      ;;
+      -java)
+      resetAll
+      JAVA=0
+      ;;
+      -cassandra)
+      resetAll
+      CASSANDRA=0
+      ;;
+    esac
+  shift
+  done
+
 function error_handler () {
   if [[ $1 -ne 0 ]]; then
     echo -e "\n${RED}ERROR: ${2}${NC}"
@@ -153,21 +207,38 @@ function install_cassandra {
 ## RESOLVE GLOBAL DEP =====================================================
 ## ========================================================================
 
-function init {
-  command -v mvn >/dev/null && echo "mvn Found In \$PATH" || install_maven
-  command -v npm >/dev/null && echo "npm Found In \$PATH" || install_npm
-  command -v nvm >/dev/null && echo "nvm Found In \$PATH" || install_nvm
-  command -v bower >/dev/null && echo "bower Found In \$PATH" || install_bower
-  command -v gem >/dev/null && echo "gem Found In \$PATH" || install_gem
-  command -v java >/dev/null && echo "java Found In \$PATH" || install_java
-  command -v cassandra >/dev/null && echo "cassandra Found In \$PATH" || install_cassandra
 
-  which asciidoctor
-  if [[ $? -ne 0 ]]; then
-    install_asciidoctor
-  else
-    echo "asciidoctor Found In \$PATH"
+
+function init {
+
+  if [[ ${MAVEN} -eq 0 ]]; then
+    command -v mvn >/dev/null && echo "mvn Found In \$PATH" || install_maven
   fi
+  if [[ ${NPM} -eq 0 ]]; then
+    command -v npm >/dev/null && echo "npm Found In \$PATH" || install_npm
+  fi
+  if [[ ${NVM} -eq 0 ]]; then
+    command -v nvm >/dev/null && echo "nvm Found In \$PATH" || install_nvm
+  fi
+  if [[ ${BOWER} -eq 0 ]]; then
+    command -v bower >/dev/null && echo "bower Found In \$PATH" || install_bower
+  fi
+  if [[ ${GEM} -eq 0 ]]; then
+    command -v gem >/dev/null && echo "gem Found In \$PATH" || install_gem
+    which asciidoctor
+    if [[ $? -ne 0 ]]; then
+      install_asciidoctor
+    else
+      echo "asciidoctor Found In \$PATH"
+    fi
+  fi
+  if [[ ${JAVA} -eq 0 ]]; then
+    command -v java >/dev/null && echo "java Found In \$PATH" || install_java
+  fi
+  if [[ ${CASSANDRA} -eq 0 ]]; then
+    command -v cassandra >/dev/null && echo "cassandra Found In \$PATH" || install_cassandra
+  fi
+
 }
 
 init
