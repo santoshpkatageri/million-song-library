@@ -7,6 +7,7 @@ BUILD_SERVER=1
 BUILD_NODE=1
 SKIP_VALIDATION=1
 AUTO_YES=1
+RUN_SERVERS=1
 
 RED='\033[0;31m'
 GREEN='\033[1;36m'
@@ -19,53 +20,38 @@ NC='\033[0m' # no color
 CURRENT=`pwd`
 PROJECT_PATH=${CURRENT}/..
 
-while [[ $# > 0 ]]; do
-  key="$1"
-  case $key in
-    -c|--cassandra)
-    BUILD_CASSANDRA=0
-    path_to_cassandra="$2"
-    shift
-    ;;
-    -g|--git)
-    RUN_GIT=0
-    ;;
-    -s|--server)
-    BUILD_SERVER=0
-    ;;
-    -n|--node)
-    BUILD_NODE=0
-    ;;
-    -v|--skip-validation)
-    SKIP_VALIDATION=0
-    ;;
-    -y|--auto-yes)
-    AUTO_YES=0
-    ;;
-    \0|-d|--default)
-    ADD_HOST=0
-    RUN_GIT=0
-    BUILD_SERVER=0
-    BUILD_NODE=0
-    ;;
-    *)
-    echo -e "\n${GREEN}No valid params provided";
-    echo -e "${GREEN}-s|--server ................................... build server"
-    echo -e "${GREEN}-g|--git ...................................... update and pull git sources and sub-modules"
-    echo -e "${GREEN}-c <cassandra-path>|--cassandra <path> ........ build cassandra keyspace and load data"
-    echo -e "${GREEN}-v|--skip-validation .......................... skips validation of required installed software"
-    echo -e "${GREEN}-y|--auto-yes....... .......................... automatically accepts bootstrapping${NC}"
-    exit 1;
-    ;;
-  esac
-shift
-done
-
 function error_handler () {
     if [[ $1 -ne 0 ]]; then
         echo -e "${RED}ERROR: ${2}${NC}"
         exit 1;
     fi;
+}
+
+function startupBackEndServices () {
+  echo -e "\n${GREEN} STARTING BACK-END SERVICES... ${NC}\n"
+  cd ${PROJECT_PATH}/msl-pages
+  ( npm run serve-all & ) > /dev/null 2>&1
+  echo -e "\n${ORANGE} COMPLETED STARTING BACK-END SERVICES ${NC}\n"
+}
+
+function startupUiService () {
+  echo -e "\n${GREEN} STARTING UI SERVICE... ${NC}\n"
+  cd ${PROJECT_PATH}/msl-pages
+  ( npm run full-dev & ) > /dev/null 2>&1
+  echo -e "\n${ORANGE} COMPLETED STARTING UI SERVICE ${NC}\n"
+}
+
+function startupServices () {
+  echo -e "\n${GREEN} STARTING SERVICES... ${NC}\n"
+  startupBackEndServices
+  startupUiService
+  echo -e "\n${ORANGE} COMPLETED STARTING SERVICES ${NC}\n"
+
+  echo -e "\n\nAll set, go to ${GREEN}http://localhost:3000${NC}\n    It may take up to a minute or two for the services to complete their startup and become active.\n    Press ctrl-C to shutdown services and terminate MSL.${NC}\n"
+  while :
+  do
+    read -p ""
+  done
 }
 
 function validateTools {
@@ -88,12 +74,14 @@ function runGit {
     echo -e "\n${GREEN} PULLING LATEST GIT SUBMODULES... ${NC}\n"
     cd ${PROJECT_PATH}
     git submodule init
+    error_handler $? "unable to git submodule init"
     git submodule sync
-    error_handler $? "unable to git submodule init, please verify ssh"
-    sudo git submodule update --init
-    error_handler $? "unable to git submodule update, please verify ssh"
+    error_handler $? "unable to git submodule sync"
+    git submodule update --init
+    error_handler $? "unable to git submodule update"
     echo -e "\n${ORANGE} DONE PULLING LATEST GIT SUBMODULE ${NC}\n"
-    else echo -e "${GRAY}........................ skip git update${NC}"
+  else
+    echo -e "${GRAY}........................ skip git update${NC}"
   fi
 }
 
@@ -249,12 +237,84 @@ function init {
     validateTools
   fi
 
+  # Source any tools that may be installed via Homebrew
+  if type -p brew; then
+    brew --prefix nvm
+    if [[ $? -eq 0 ]]; then
+      echo Found nvm in Homebrew
+      . $(brew --prefix nvm)/nvm.sh
+    fi
+  fi
+
   if [[ AUTO_YES -eq 0 ]]; then
     bootstrap
   elif confirmBootstrap ; then
     bootstrap
   fi
+
+  if [[ RUN_SERVERS -eq 0 ]]; then
+    startupServices
+  fi
 }
+
+function setDefaultBuildSettings () {
+  ADD_HOST=0
+  RUN_GIT=0
+  BUILD_CASSANDRA=0
+  BUILD_SERVER=0
+  BUILD_NODE=0
+  RUN_SERVERS=0
+}
+
+if [ "$#" == 0 ]; then
+  setDefaultBuildSettings
+fi
+
+while [[ $# > 0 ]]; do
+  key="$1"
+  case $key in
+    -c|--cassandra)
+    BUILD_CASSANDRA=0
+    path_to_cassandra="$2"
+    shift
+    ;;
+    \0|-d|--default)
+    setDefaultBuildSettings
+    ;;
+    -g|--git)
+    RUN_GIT=0
+    ;;
+    -n|--node)
+    BUILD_NODE=0
+    ;;
+    -r|--run)
+    RUN_SERVERS=0
+    ;;
+    -s|--server)
+    BUILD_SERVER=0
+    ;;
+    -v|--skip-validation)
+    SKIP_VALIDATION=0
+    ;;
+    -y|--auto-yes)
+    AUTO_YES=0
+    ;;
+    *)
+    echo -e "\n${GREEN}No valid params provided";
+    echo -e "${GREEN}-c <cassandra-path>|--cassandra <path> ........ build cassandra keyspace and load data"
+    echo -e "${GREEN}-d|--default................................... build with defaults (includes -c, -g, -n, -r, and -s)"
+    echo -e "${GREEN}-g|--git ...................................... update and pull git sources and sub-modules"
+    echo -e "${GREEN}-n|--node ..................................... build node (pages)"
+    echo -e "${GREEN}-r|--run ...................................... run startup process on all servers"
+    echo -e "${GREEN}-s|--server ................................... build server"
+    echo -e "${GREEN}-v|--skip-validation .......................... skips validation of required installed software"
+    echo -e "${GREEN}-y|--auto-yes....... .......................... automatically accepts bootstrapping${NC}"
+    echo -e "${GREEN}-y|--auto-yes....... .......................... automatically accepts bootstrapping${NC}"
+    exit 1;
+    ;;
+  esac
+shift
+done
 
 init
 
