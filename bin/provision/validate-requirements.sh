@@ -19,19 +19,50 @@ shift
 done
 
 function validatePorts {
+  allPortsAvailable=true
+
   if lsof -i:3000; then
     echo "MSL Required Port 3000 in use"
-  elif lsof -i:3002; then
+    allPortsAvailable=false
+  fi
+  if lsof -i:3002; then
     echo "MSL Required Port 3002 in use"
-  elif lsof -i:3003; then
+    allPortsAvailable=false
+  fi
+  if lsof -i:3003; then
     echo "MSL Required Port 3003 in use"
-  elif lsof -i:3004; then
+    allPortsAvailable=false
+  fi
+  if lsof -i:3004; then
     echo "MSL Required Port 3004 in use"
-  elif lsof -i:9042; then
+    allPortsAvailable=false
+  fi
+  if lsof -i:9001; then
+    echo "MSL Required Port 9001 in use"
+    allPortsAvailable=false
+  fi
+  if lsof -i:9002; then
+    echo "MSL Required Port 9002 in use"
+    allPortsAvailable=false
+  fi
+  if lsof -i:9003; then
+    echo "MSL Required Port 9003 in use"
+    allPortsAvailable=false
+  fi
+  if lsof -i:9004; then
+    echo "MSL Required Port 9004 in use"
+    allPortsAvailable=false
+  fi
+  if lsof -i:9042; then
     echo "MSL Required Port 9042 for Cassandra in use"
+    allPortsAvailable=false
+  fi
+
+  if [ "$allPortsAvailable" = true ] ; then
+    echo "Ports 3000, 3002, 3003, 3004, 9001, 9002, 9003, 9004 and 9042 are available"
   else
-    echo "Ports 3000, 3002, 3003, 3004, and 9042 are open for business"
-    
+    echo "Quitting MSL installation."
+    exit 1
   fi
 }
 
@@ -39,28 +70,26 @@ function validateOS {
   if [[ ${UNAME_S} =~ Linux* ]] ; then
     echo "Linux OS"
   elif [[ ${UNAME_S} =~ Darwin* ]] ; then
-     version_string=$("sw_vers" -productVersion)
-     echo Evaluating OS X machine version ${version_string}
-     minVersion=10.11
+    version_string=$("sw_vers" -productVersion)
+    echo Evaluating OS X machine version ${version_string}
+    minVersion=10.11
 
-     ## if we have a greater OS X version than 10.11 prompt the user to continue
-     if [[  "${version_string:0:2}" -gt "10"  || ("${version_string:0:2}" -eq "11" && "${version_string:3:2}" -gt "10") ]]; then
-          echo "OS X version is greater than ${minVersion} (El Capitan)"
-          printf "\t** The OS X version installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of OS X, so you may experience problems. "
-          if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of OS X that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]
-          then
-            echo "Quitting MSL installation."
-            exit 1
-          fi
-
-      else
-      ## confirm that we have the minimum version of OS X
-         if [[  "${version_string:0:2}" -lt "10"  || ("${version_string:0:2}" -eq "10" && "${version_string:3:2}" -lt "11") ]]; then
-          echo "OS X version is less than ${minVersion}"
-          exit 1;
-          fi
+    if [[ $version_string =~ ([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "10" || ("BASH_REMATCH[1]" == "10" && "BASH_REMATCH[2]" -lt "11") ]]; then
+        printf "The version of OS X installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}) (El Capitan). Please install OS X ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "10" || ("BASH_REMATCH[1]" == "10" && "BASH_REMATCH[2]" -gt "11")]]; then
+        printf "** The version of OS X installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of OS X, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of OS X that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
       fi
+    else
+      echo "Found unparsable OS X version ${version_string}. Cannot verify OS X version."
+      echo "Please install OS X ${minVersion} or greater"
+      exit 1;
+    fi
   else
     echo "Invalid OS"
     exit 1;
@@ -68,74 +97,78 @@ function validateOS {
 }
 
 function verifyGit {
- minVersion=2.2.x
+  minVersion=2.2.x
   if type -p git; then
-      echo found git executable in PATH
-      _git=git
+    echo Found git executable in PATH
+    _git=git
   else
-      echo "please install git ${minVersion}"
-      exit;
+    echo "Please install git ${minVersion}"
+    exit;
   fi
 
   if [[ "$_git" ]]; then
-      version_string=$("$_git" --version)
-      version="${version_string}"
-      echo git version "${version}"
+    version_string=$("$_git" --version)
+    echo Found git version "${version_string}"
 
-      if [[ "${version:12:1}" -ge "2" && "${version:14:1}" -ge "2" ]]; then
-          echo "git version is greater than ${minVersion}"
-          printf "\t** The version of git installed on this machine (${version}) is newer than the ${minVersion} version needed for MSL. MSL has not been tested using this version of git, so you may experience problems. "
-          if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of git that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]
-          then
-            echo "Quitting MSL installation."
-            exit 1
-          fi
-      else
-          echo "git version is less than ${minVersion}"
-          exit 1;
+    if [[ $version_string =~ git\ version\ ([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "2" || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" -lt "2") ]]; then
+        printf "The version of git installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}). Please install git ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "2" || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" -gt "2")]]; then
+        printf "** The version of git installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of git, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of git that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
       fi
+    else
+      echo "Found unparsable git version ${version_string}. Cannot verify git version."
+      echo "Please install git ${minVersion} or greater"
+      exit 1;
+    fi
   fi
 }
 
 function verifyNpm {
-    minVersion=2.7.x
+  minVersion=2.7.x
   if type -p npm; then
-      echo found npm executable in PATH
-      _npm=npm
+    echo Found npm executable in PATH
+    _npm=npm
   else
-      if [[ "yes" == $(askYesOrNo "Would you like us to install npm for you?") ]]; then
-        bash basic-dep-setup.sh -npm
-      else
-        echo "Please install npm ${minVersion} or greater"
-        exit 1;
-      fi
+    if [[ "yes" == $(askYesOrNo "Would you like us to install npm for you?") ]]; then
+      bash basic-dep-setup.sh -npm
+    else
+      echo "Please install npm ${minVersion} or greater"
+      exit 1;
+    fi
   fi
 
   if [[ "$_npm" ]]; then
+    version_string=$("$_npm" --version)
+    echo Found npm version "$version_string"
 
-      version_string=$("$_npm" --version)
-      echo found npm version "$version_string"
-
-       if [[ "${version_string:0:1}" -ge "2" && "${version_string:2:2}" -ge "12" ]]; then
-          printf "\t** The version of npm installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of npm, so you may experience problems. "
-          if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of npm that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]
-          then
-            echo "Quitting MSL installation."
-            exit 1
-          fi
-
-      else
-          echo "found npm version ${version_string} is greater than ${minVersion}"
-          exit 1;
+    if [[ $version_string =~ ([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "2" || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" -lt "7") ]]; then
+        printf "The version of npm installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}). Please install npm ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "2" || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" -gt "7")]]; then
+        printf "** The version of npm installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of npm, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of npm that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
       fi
+    else
+      echo "Found unparsable npm version ${version_string}. Cannot verify npm version."
+      echo "Please install npm ${minVersion} or greater"
+      exit 1;
+    fi
   fi
 }
 
 function verifyBower {
   if type -p bower; then
-      echo found bower executable in PATH
+    echo Found bower executable in PATH
   else
     if [[ "yes" == $(askYesOrNo "Would you like us to install bower for you?") ]]; then
       bash basic-dep-setup.sh -bower
@@ -148,7 +181,7 @@ function verifyBower {
 
 function verifyGem {
   if type -p gem; then
-      echo found gem executable in PATH
+    echo Found gem executable in PATH
   else
     if [[ "yes" == $(askYesOrNo "Would you like us to install gem for you?") ]]; then
       bash basic-dep-setup.sh -gem
@@ -162,7 +195,7 @@ function verifyGem {
 function verifyNode {
   minVersion=0.12.x
   if type -p node; then
-      echo found nodejs executable in PATH
+      echo Found node executable in PATH
       _node=node
   else
       if [[ "yes" == $(askYesOrNo "Would you like us to install node for you?") ]]; then
@@ -170,156 +203,168 @@ function verifyNode {
         verifyBower
         verifyGem
       else
-        echo "Please install nodejs version ${minVersion} or greater"
+        echo "Please install node version ${minVersion} or greater"
         exit 1;
       fi
   fi
 
   if [[ "$_node" ]]; then
-      version_string=$("$_node" --version)
-      echo found node version "$version_string"
-      version="${version_string: -5}"
+    version_string=$("$_node" --version)
+    echo Found node version "$version_string"
 
-      if [[ "${version:0:1}" -ge "0" || "${version:2:1}" -ge "12" ]]; then
-          echo "node version is greater than ${minVersion}"
-          printf "\t** The version of node installed on this machine (${version}) is newer than the ${minVersion} version needed for MSL. MSL has not been tested using this version of Node, so you may experience problems. "
-          if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of Node that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]; then
-            echo "Quitting MSL installation."
-            exit 1
-          fi
-          verifyBower
-          verifyGem
-      else
-          echo "node version is less than ${minVersion}"
-          exit 1;
+    if [[ $version_string =~ v([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "0" || ("BASH_REMATCH[1]" == "0" && "BASH_REMATCH[2]" -lt "12") ]]; then
+        printf "The version of node installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}). Please install node ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "0" || ("BASH_REMATCH[1]" == "0" && "BASH_REMATCH[2]" -gt "12")]]; then
+        printf "** The version of node installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of node, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of node that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
       fi
+    else
+      echo "Found unparsable node version ${version_string}. Cannot verify node version."
+      echo "Please install node ${minVersion} or greater"
+      exit 1;
+    fi
+    verifyBower
+    verifyGem
   fi
 }
 
 function verifyJava {
   minVersion=1.8.x
   if type -p java; then
-      echo found java executable in PATH
+      echo Found java executable in PATH
       _java=java
   elif [[ -n "$JAVA_HOME" ]] && [[ -x "$JAVA_HOME/bin/java" ]];  then
-      echo found java executable in JAVA_HOME
+      echo Found java executable in JAVA_HOME
       _java="$JAVA_HOME/bin/java"
   else
     if [[ "yes" == $(askYesOrNo "Would you like us to install java 1.8 for you?") ]]; then
         bash basic-dep-setup.sh -java
     else
-      echo "please install Java version ${minVersion} or greater"
+      echo "Please install Java version ${minVersion} or greater"
       exit 1;
     fi
   fi
 
   if [[ "$_java" ]]; then
-      version=$("$_java" -version 2>&1 | awk -F '"' '/version/ {print $2}')
+    version_string=$("$_java" -version 2>&1 | awk -F '"' '/version/ {print $2}')
+    echo Found java version "$version_string"
 
-      echo java version "$version"
-      if [[ "${version:0:1}" -eq "1" && "${version:2:1}" -gt "8" ]]; then
-          echo "java version is greater than ${minVersion}"
-          printf "\t** The version of Java installed on this machine (${version}) is newer than the ${minVersion} version needed for MSL. MSL has not been tested using this version of Java, so you may experience problems. "
-          if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of Java that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]
-          then
-            echo "Quitting MSL installation."
-            exit 1
-          fi
-      else
-      ## confirm that we have the minimum version of Java
-        if [[ "${version:0:1}" -eq "1" && "${version:2:1}" -lt "8" ]]; then
-          echo "Java version is less than ${minVersion}"
-          exit 1;
-          fi
+    if [[ $version_string =~ ([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "1" || ("BASH_REMATCH[1]" == "1" && "BASH_REMATCH[2]" -lt "8") ]]; then
+        printf "The version of java installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}). Please install java ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "1" || ("BASH_REMATCH[1]" == "1" && "BASH_REMATCH[2]" -gt "8")]]; then
+        printf "** The version of java installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of java, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of java that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
+      fi
+    else
+      echo "Found unparsable java version ${version_string}. Cannot verify java version."
+      echo "Please install java ${minVersion} or greater"
+      exit 1;
     fi
   fi
 }
 
 function verifyCassandra {
-  echo "cassandra directory: " ${path_to_cassandra}
+  minVersion=2.1.11
+  echo "Cassandra directory: " ${path_to_cassandra}
   if [[ ${path_to_cassandra} ]]; then
-      if [[ ! -d "${path_to_cassandra}/bin" ]]; then
-          if [[ ! -d "${path_to_cassandra}bin" ]]; then
-            echo "wrong cassandra directory provided"
-            exit 1
-          else
-            CASSANDRA_BIN="${path_to_cassandra}bin";
-          fi
+    if [[ ! -d "${path_to_cassandra}/bin" ]]; then
+      if [[ ! -d "${path_to_cassandra}bin" ]]; then
+        echo "Invalid cassandra directory provided"
+        exit 1
       else
-        CASSANDRA_BIN="${path_to_cassandra}/bin";
+        CASSANDRA_BIN="${path_to_cassandra}bin";
       fi
+    else
+      CASSANDRA_BIN="${path_to_cassandra}/bin";
+    fi
   fi
 
   if type -p cassandra; then
-      echo found cassandra executable in PATH
-      _cassandra=cassandra
+    echo Found cassandra executable in PATH
+    _cassandra=cassandra
   elif [[ -n "$CASSANDRA_BIN" ]] && [[ -x "$CASSANDRA_BIN/cassandra" ]];  then
-      echo found cassandra executable in CASSANDRA_HOME
-      _cassandra="$CASSANDRA_BIN/cassandra"
+    echo Found cassandra executable in CASSANDRA_BIN
+    _cassandra="$CASSANDRA_BIN/cassandra"
+  elif [[ -n "$CASSANDRA_HOME" ]] && [[ -x "$CASSANDRA_HOME/bin/cassandra" ]];  then
+    echo Found cassandra executable in CASSANDRA_HOME
+    _cassandra="$CASSANDRA_HOME/bin/cassandra"
   else
     if [[ "yes" == $(askYesOrNo "Would you like us to install cassandra for you?") ]]; then
       bash basic-dep-setup.sh -cassandra
+      _cassandra=cassandra
     else
-      echo "Please download/install cassandra version 2.1.11"
+      echo "Please download/install cassandra version ${minVersion}"
       exit 1;
     fi
   fi
 
   if [[ "$_cassandra" ]]; then
-      version=$("$_cassandra" -v)
-      echo cassandra version "$version"
-      if [[ "${version:0:1}" -eq "2" && "${version:2:1}" -eq "1" &&  "${version:4:2}" -eq "11" ]]; then
-          echo "cassandra version found 2.1.11"
-      else
-          echo "Please see about using cassandra version 2.1.11"
-          exit 1;
+    version_string=$("$_cassandra" -v)
+    echo Found cassandra version "$version_string"
+
+    if [[ $version_string =~ ([0-9]+).([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "2" || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" -lt "1") || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" == "1" && "BASH_REMATCH[3]" -lt "11") ]]; then
+        printf "The version of cassandra installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}). Please install cassandra ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "2" || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" -gt "1") || ("BASH_REMATCH[1]" == "2" && "BASH_REMATCH[2]" == "1" && "BASH_REMATCH[3]" -gt "11") ]]; then
+        printf "** The version of cassandra installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of cassandra, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of cassandra that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
       fi
+    else
+      echo "Found unparsable cassandra version ${version_string}. Cannot verify cassandra version."
+      echo "Please install cassandra ${minVersion} or greater"
+      exit 1;
+    fi
   fi
 }
 
 function verifyMaven {
-    minVersion=3.3.9
+  minVersion=3.3.9
   if type -p mvn; then
-      echo found mvn executable in PATH
-      _mvn=mvn
+    echo Found mvn executable in PATH
+    _mvn=mvn
   else
     if [[ "yes" == $(askYesOrNo "Would you like us to install maven for you?") ]]; then
       bash basic-dep-setup.sh -maven
     else
-      echo "please install maven version ${minVersion} or greater"
+      echo "Please install maven version ${minVersion} or greater"
       exit 1;
     fi
   fi
 
-  version=$(mvn --version | grep -e 'Maven\s[3-9]\.[0-9]\.[0-9]*')
-  mvn --version | grep -e 'Maven\s[3-9]\.[0-9]\.[0-9]*'
-  if [[ $? -eq 0 ]]; then
-    mvn --version | grep -e 'Maven\s[3-9]\.[4-9]\.[0-9]*'
-    if [[ $? -eq 0 ]]; then
-      echo "Maven 3.4.x found"
-        echo "Maven version is greater than ${minVersion}"
-          printf "\t** The version of Maven installed on this machine (${version}) is newer than the ${mvn} version needed for MSL. MSL has not been tested using this version of Maven, so you may experience problems. "
-          if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of Maven that is currently installed?") || \
-            "no" == $(askYesOrNo "Are you *really* sure?") ]]
-          then
-            echo "Quitting MSL installation."
-            exit 1
-          fi
+  if [[ "$_mvn" ]]; then
+    version_string=$("$_mvn" --version)
+    echo Found mvn version "$version_string"
 
-    else
-      mvn --version | grep -e 'Maven\s3\.3\.9*'
-      if [[ $? -eq 0 ]]; then
-        echo "Maven ${minVersion} found"
-      else
-        echo "No maven ${minVersion} or greater was found"
-        exit 1;
+    if [[ $version_string =~ ([0-9]+).([0-9]+).([0-9]+) ]]; then
+      if [[ "BASH_REMATCH[1]" -lt "3" || ("BASH_REMATCH[1]" == "3" && "BASH_REMATCH[2]" -lt "3") || ("BASH_REMATCH[1]" == "3" && "BASH_REMATCH[2]" == "3" && "BASH_REMATCH[3]" -lt "9") ]]; then
+        printf "The version of mvn installed on this machine (${version_string}) is older than the version needed for MSL (${minVersion}). Please install mvn ${minVersion} or greater"
+        exit 1
+      elif [[ "BASH_REMATCH[1]" -gt "3" || ("BASH_REMATCH[1]" == "3" && "BASH_REMATCH[2]" -gt "3") || ("BASH_REMATCH[1]" == "3" && "BASH_REMATCH[2]" == "3" && "BASH_REMATCH[3]" -gt "9") ]]; then
+        printf "** The version of mvn installed on this machine (${version_string}) is newer than the version needed for MSL (${minVersion}). MSL has not been tested using this version of mvn, so you may experience problems. "
+        if [[ "no" == $(askYesOrNo "Would you like to continue the installation of MSL using the version of mvn that is currently installed?") ]]; then
+          echo "Quitting MSL installation."
+          exit 1
+        fi
       fi
+    else
+      echo "Found unparsable mvn version ${version_string}. Cannot verify mvn version."
+      echo "Please install mvn ${minVersion} or greater"
+      exit 1;
     fi
-  else
-    echo "No maven ${minVersion} or greater was found"
-    exit 1;
   fi
 }
 
@@ -332,13 +377,13 @@ function verifyNvm {
   if [[ -f ~/.zshrc ]]; then . ~/.zshrc ; fi
   
   if type -p nvm; then
-      echo found nvm executable in PATH
+      echo Found nvm executable in PATH
   else
     ## not found by path, try looking for it via Homebrew
     if type -p brew; then
       brew ls --versions nvm | grep -e 'nvm\s[0-9]*\.[0-9]*\.[0-9]*'
       if [[ $? -eq 0 ]]; then
-        echo found nvm in Homebrew
+        echo Found nvm in Homebrew
       else
         if [[ "yes" == $(askYesOrNo "Would you like us to install nvm for you?") ]]; then
           bash basic-dep-setup.sh -nvm
